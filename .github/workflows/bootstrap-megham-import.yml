@@ -1,0 +1,54 @@
+name: Bootstrap MEGHAM import
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/bootstrap-megham-import.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out import branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/import-megham-cloud-product
+          fetch-depth: 0
+
+      - name: Rebuild and verify supplied archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .import/ready
+          cat .import/*.part > /tmp/megham.zip.b64
+          base64 --decode /tmp/megham.zip.b64 > /tmp/megham.zip
+          echo "68c62eb2776a4bad83eda32881ced6d3734cfeb1559f50793ada5411bf2c4404  /tmp/megham.zip" | sha256sum -c -
+          unzip -o /tmp/megham.zip -d .
+          rm -rf .import
+          rm -f .github/workflows/import-megham-product.yml
+
+      - name: Commit product to import branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import MEGHAM Cloud product"
+          git push origin HEAD:agent/import-megham-cloud-product
+
+      - name: Remove bootstrap workflow from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B main origin/main
+          rm -f .github/workflows/bootstrap-megham-import.yml
+          git add -A
+          git commit -m "Remove temporary MEGHAM import bootstrap"
+          git push origin HEAD:main

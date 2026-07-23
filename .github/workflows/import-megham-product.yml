@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - agent/import-megham-cloud-product
-    paths:
-      - ".import/ready"
 
 permissions:
   contents: write

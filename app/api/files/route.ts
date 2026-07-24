@@ -46,7 +46,8 @@ export async function POST(request: Request) {
       bytes: uploaded.bytes,
     });
     return NextResponse.json({ file: saved }, { status: 201 });
-  } catch {
+  } catch (error) {
+    console.error("MEGHAM upload failed", error);
     return NextResponse.json({ error: "Upload failed." }, { status: 500 });
   }
 }

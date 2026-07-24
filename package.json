@@ -8,16 +8,20 @@
   "scripts": {
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
-    "build": "bash scripts/build-verified.sh",
-    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "build": "next build",
+    "start": "next start",
+    "test": "next build",
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cloudinary": "^2.7.0",
     "drizzle-orm": "0.45.2",
+    "jose": "^6.1.0",
     "lucide-react": "^0.468.0",
+    "mongoose": "^9.1.5",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6"

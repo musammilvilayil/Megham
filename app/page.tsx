@@ -14,7 +14,7 @@ type ViewName =
   | "Activity" | "Admin" | "Settings";
 
 type FileItem = {
-  id: number;
+  id: string;
   name: string;
   type: "folder" | "pdf" | "doc" | "image" | "zip";
   size: string;
@@ -24,14 +24,20 @@ type FileItem = {
   shared?: boolean;
 };
 
-const initialFiles: FileItem[] = [
-  { id: 1, name: "MEGHAM Product", type: "folder", size: "24 items", modified: "2 min ago", owner: "You", starred: true, shared: true },
-  { id: 2, name: "Design resources", type: "folder", size: "18 items", modified: "Yesterday", owner: "You", shared: true },
-  { id: 3, name: "Project proposal.pdf", type: "pdf", size: "8.4 MB", modified: "Today, 9:42 AM", owner: "You", starred: true },
-  { id: 4, name: "Research notes.docx", type: "doc", size: "2.1 MB", modified: "Jul 21, 2026", owner: "Aishwarya", shared: true },
-  { id: 5, name: "Launch artwork.png", type: "image", size: "12.8 MB", modified: "Jul 20, 2026", owner: "Nirmal", shared: true },
-  { id: 6, name: "Source backup.zip", type: "zip", size: "1.6 GB", modified: "Jul 18, 2026", owner: "You" },
-];
+type SessionUser = { _id?: string; id?: string; name: string; email: string };
+
+const fileType = (name: string): FileItem["type"] => {
+  const extension = name.split(".").pop()?.toLowerCase();
+  if (extension === "pdf") return "pdf";
+  if (["doc", "docx", "txt"].includes(extension ?? "")) return "doc";
+  if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension ?? "")) return "image";
+  return "zip";
+};
+
+const readableSize = (bytes: number) =>
+  bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 const navPrimary: { label: ViewName; icon: typeof Cloud }[] = [
   { label: "Dashboard", icon: LayoutDashboard },
@@ -57,15 +63,46 @@ const fileIcon = (type: FileItem["type"]) => {
 };
 
 export default function Home() {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [active, setActive] = useState<ViewName>("Dashboard");
   const [dark, setDark] = useState(false);
   const [sidebar, setSidebar] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [grid, setGrid] = useState(false);
-  const [files, setFiles] = useState(initialFiles);
+  const [files, setFiles] = useState<FileItem[]>([]);
   const [toast, setToast] = useState("");
   const [notifications, setNotifications] = useState(false);
+
+  const loadFiles = async () => {
+    const response = await fetch("/api/files");
+    if (!response.ok) return;
+    const data = await response.json();
+    setFiles(data.files.map((item: {
+      _id: string; name: string; bytes: number; createdAt: string;
+      starred?: boolean;
+    }) => ({
+      id: item._id,
+      name: item.name,
+      type: fileType(item.name),
+      size: readableSize(item.bytes),
+      modified: new Date(item.createdAt).toLocaleString(),
+      owner: "You",
+      starred: item.starred,
+    })));
+  };
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = await response.json();
+        setUser(data.user);
+        await loadFiles();
+      })
+      .finally(() => setAuthLoading(false));
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("megham-theme");
@@ -115,20 +152,31 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const toggleStar = (id: number) => {
+  const toggleStar = (id: string) => {
     setFiles((current) => current.map((item) => item.id === id ? { ...item, starred: !item.starred } : item));
     setToast("Starred files updated");
   };
 
-  const completeUpload = () => {
-    const next: FileItem = {
-      id: Date.now(), name: "Portfolio-assets.zip", type: "zip", size: "46.2 MB",
-      modified: "Just now", owner: "You",
-    };
-    setFiles((current) => [next, ...current]);
+  const completeUpload = (uploaded: {
+    _id: string; name: string; bytes: number;
+  }) => {
+    setFiles((current) => [{
+      id: uploaded._id,
+      name: uploaded.name,
+      type: fileType(uploaded.name),
+      size: readableSize(uploaded.bytes),
+      modified: "Just now",
+      owner: "You",
+    }, ...current]);
     setUploadOpen(false);
-    setToast("Upload complete — Portfolio-assets.zip");
+    setToast(`Upload complete — ${uploaded.name}`);
   };
+
+  if (authLoading) return <div className="auth-shell"><div className="auth-card"><Cloud size={34} /><h1>MEGHAM</h1><p>Opening your workspace…</p></div></div>;
+  if (!user) return <AuthScreen onAuthenticated={(nextUser) => {
+    setUser(nextUser);
+    loadFiles();
+  }} />;
 
   return (
     <div className="app-shell">
@@ -165,9 +213,13 @@ export default function Home() {
           <button onClick={() => setToast("Upgrade plans will be available soon")}>Upgrade storage</button>
         </div>
         <div className="profile">
-          <div className="avatar">MM</div>
-          <div><strong>Muhammad Musammil</strong><span>Personal workspace</span></div>
-          <MoreHorizontal size={18} />
+          <div className="avatar">{user.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</div>
+          <div><strong>{user.name}</strong><span>{user.email}</span></div>
+          <button aria-label="Sign out" onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
+            setUser(null);
+            setFiles([]);
+          }}><MoreHorizontal size={18} /></button>
         </div>
       </aside>
 
@@ -218,14 +270,14 @@ export default function Home() {
         </div>
       </main>
 
-      {uploadOpen && <UploadModal close={() => setUploadOpen(false)} complete={completeUpload} />}
+      {uploadOpen && <UploadModal close={() => setUploadOpen(false)} complete={completeUpload} error={setToast} />}
       {toast && <div className="toast"><ShieldCheck size={18} />{toast}</div>}
     </div>
   );
 }
 
 function Dashboard({ files, onUpload, onNavigate, onStar }: {
-  files: FileItem[]; onUpload: () => void; onNavigate: (view: ViewName) => void; onStar: (id: number) => void;
+  files: FileItem[]; onUpload: () => void; onNavigate: (view: ViewName) => void; onStar: (id: string) => void;
 }) {
   return (
     <>
@@ -270,7 +322,7 @@ function Dashboard({ files, onUpload, onNavigate, onStar }: {
 }
 
 function FilesView({ title, files, query, grid, setGrid, onUpload, onStar }: {
-  title: ViewName; files: FileItem[]; query: string; grid: boolean; setGrid: (v: boolean) => void; onUpload: () => void; onStar: (id: number) => void;
+  title: ViewName; files: FileItem[]; query: string; grid: boolean; setGrid: (v: boolean) => void; onUpload: () => void; onStar: (id: string) => void;
 }) {
   const empty = title === "Trash" || files.length === 0;
   return (
@@ -301,7 +353,7 @@ function FilesView({ title, files, query, grid, setGrid, onUpload, onStar }: {
   );
 }
 
-function FileCard({ item, onStar }: { item: FileItem; onStar: (id: number) => void }) {
+function FileCard({ item, onStar }: { item: FileItem; onStar: (id: string) => void }) {
   return (
     <article className="file-card">
       <div className={`file-symbol ${item.type}`}>{fileIcon(item.type)}</div>
@@ -312,7 +364,7 @@ function FileCard({ item, onStar }: { item: FileItem; onStar: (id: number) => vo
   );
 }
 
-function FileTable({ files, onStar }: { files: FileItem[]; onStar: (id: number) => void }) {
+function FileTable({ files, onStar }: { files: FileItem[]; onStar: (id: string) => void }) {
   return (
     <div className="table-wrap">
       <table>
@@ -391,22 +443,78 @@ function Toggle({ label, value, setValue }: { label: string; value: boolean; set
   return <div className="toggle-row"><span>{label}</span><button className={`toggle ${value ? "on" : ""}`} onClick={() => setValue(!value)} aria-pressed={value}><i /></button></div>;
 }
 
-function UploadModal({ close, complete }: { close: () => void; complete: () => void }) {
+function UploadModal({ close, complete, error }: {
+  close: () => void;
+  complete: (file: { _id: string; name: string; bytes: number }) => void;
+  error: (message: string) => void;
+}) {
   const [progress, setProgress] = useState(0);
-  const start = () => {
-    setProgress(14);
-    const timer = window.setInterval(() => setProgress((p) => {
-      if (p >= 100) { window.clearInterval(timer); window.setTimeout(complete, 450); return 100; }
-      return Math.min(100, p + 14);
-    }), 120);
+  const [selected, setSelected] = useState<File | null>(null);
+  const start = async () => {
+    if (!selected) return;
+    setProgress(20);
+    const body = new FormData();
+    body.append("file", selected);
+    const response = await fetch("/api/files", { method: "POST", body });
+    const data = await response.json();
+    if (!response.ok) {
+      setProgress(0);
+      error(data.error ?? "Upload failed");
+      return;
+    }
+    setProgress(100);
+    window.setTimeout(() => complete(data.file), 250);
   };
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Upload files">
       <div className="modal">
         <div className="modal-head"><div><p className="eyebrow">Add to MEGHAM</p><h2>Upload files</h2></div><button onClick={close}><X size={20} /></button></div>
-        <button className="modal-drop" onClick={start}><div><CloudUpload size={30} /></div><strong>{progress ? "Portfolio-assets.zip" : "Choose files or drag them here"}</strong><span>{progress ? `${progress}% uploaded` : "Documents, images, video and archives up to 2 GB"}</span>{progress > 0 && <div className="progress"><i style={{ width: `${progress}%` }} /></div>}</button>
-        <div className="modal-actions"><button className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" onClick={start} disabled={progress > 0 && progress < 100}><Upload size={17} /> {progress ? "Uploading…" : "Select files"}</button></div>
+        <label className="modal-drop"><input type="file" hidden onChange={(event) => setSelected(event.target.files?.[0] ?? null)} /><div><CloudUpload size={30} /></div><strong>{selected?.name ?? "Choose a file"}</strong><span>{progress ? `${progress}% uploaded` : "Documents, images, video and archives up to 25 MB"}</span>{progress > 0 && <div className="progress"><i style={{ width: `${progress}%` }} /></div>}</label>
+        <div className="modal-actions"><button className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" onClick={start} disabled={!selected || progress > 0}><Upload size={17} /> {progress ? "Uploading…" : "Upload file"}</button></div>
       </div>
     </div>
+  );
+}
+
+function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: SessionUser) => void }) {
+  const [register, setRegister] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setMessage("");
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const response = await fetch(`/api/auth/${register ? "register" : "login"}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    const data = await response.json();
+    setBusy(false);
+    if (!response.ok) return setMessage(data.error ?? "Please try again.");
+    onAuthenticated(data.user);
+  };
+
+  return (
+    <main className="auth-shell">
+      <section className="auth-card">
+        <div className="brand-mark"><Cloud size={25} /></div>
+        <p className="eyebrow">MEGHAM CLOUD</p>
+        <h1>{register ? "Create your workspace" : "Welcome back"}</h1>
+        <p>{register ? "Register to upload and manage your files securely." : "Sign in to access your cloud files."}</p>
+        <form onSubmit={submit}>
+          {register && <label>Full name<input name="name" required maxLength={80} autoComplete="name" /></label>}
+          <label>Email<input name="email" type="email" required autoComplete="email" /></label>
+          <label>Password<input name="password" type="password" required minLength={8} autoComplete={register ? "new-password" : "current-password"} /></label>
+          {message && <div className="auth-error">{message}</div>}
+          <button className="primary-button" disabled={busy}>{busy ? "Please wait…" : register ? "Create account" : "Sign in"}</button>
+        </form>
+        <button className="auth-switch" onClick={() => { setRegister(!register); setMessage(""); }}>
+          {register ? "Already registered? Sign in" : "New to MEGHAM? Create account"}
+        </button>
+      </section>
+    </main>
   );
 }

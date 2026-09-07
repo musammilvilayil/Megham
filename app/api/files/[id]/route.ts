@@ -66,8 +66,11 @@ export async function DELETE(_request: Request, context: RouteContext) {
       );
     }
 
+    const resourceType = ["image", "video", "raw"].includes(file.resourceType)
+      ? file.resourceType
+      : "image";
     await cloudinary.uploader.destroy(file.publicId, {
-      resource_type: file.resourceType === "video" ? "video" : "image",
+      resource_type: resourceType as "image" | "video" | "raw",
       invalidate: true,
     });
     await file.deleteOne();

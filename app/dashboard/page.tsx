@@ -395,10 +395,10 @@ function Dashboard({ files, onUpload, onNavigate, onStar }: {
         <article className="panel storage-card">
           <div className="section-head"><div><p className="eyebrow">Storage overview</p><h2>Your cloud, at a glance</h2></div><button className="plain-button">Manage</button></div>
           <div className="storage-content">
-            <div className="storage-ring"><div><strong>{percent}%</strong><span>used</span></div></div>
+            <div className="storage-ring" style={{ background: `conic-gradient(var(--sea) 0 ${percent}%, var(--surface-3) ${percent}% 100%)` }}><div><strong>{percent}%</strong><span>used</span></div></div>
             <div className="storage-stats">
               <strong>{usedLabel} <span>uploaded</span></strong>
-              <div className="legend"><span><i className="dot blue" />Documents <b>38 GB</b></span><span><i className="dot sea" />Media <b>43 GB</b></span><span><i className="dot silver" />Other <b>21.4 GB</b></span></div>
+              <div className="legend"><span><i className="dot blue" />Documents <b>{files.filter((item) => ["pdf", "doc"].includes(item.type)).length}</b></span><span><i className="dot sea" />Media <b>{files.filter((item) => item.type === "image").length}</b></span><span><i className="dot silver" />Other <b>{files.filter((item) => !["pdf", "doc", "image"].includes(item.type)).length}</b></span></div>
             </div>
           </div>
         </article>

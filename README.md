@@ -1,18 +1,45 @@
 # MEGHAM Cloud Workspace
 
-A polished, responsive cloud-storage product interface built with Next.js, React, TypeScript and Vinext.
+MEGHAM is a full-stack cloud file workspace built with Next.js, React, TypeScript, MongoDB and Cloudinary.
 
-## Included product experiences
+## Working features
 
-- Spatial dashboard with storage insights, quick access and recent files
-- File browser with list/grid views, search, starred and shared filters
-- Upload workflow with progress and success feedback
-- Recent, shared, starred and trash views
-- Activity audit trail
-- Admin member, health and moderation overview
-- Profile, appearance and notification settings
-- Persistent light/dark theme preference
-- Responsive mobile navigation and accessible keyboard interactions
+- Account registration, login and logout with bcrypt password hashing and signed HTTP-only session cookies
+- User-scoped file metadata in MongoDB
+- Direct signed uploads to Cloudinary with a 25 MB application limit
+- List and grid file views with global search
+- Persistent starred files
+- Shared-status filtering
+- Rename files
+- Soft-delete trash with restore
+- Permanent deletion from both Cloudinary and MongoDB
+- Real uploaded-storage totals and recent-file activity
+- Light/dark theme persistence
+- Responsive desktop and mobile navigation
+- Public landing, About and Contact pages
+
+## Tech stack
+
+- Next.js 16 / React 19 / TypeScript
+- MongoDB + Mongoose
+- Cloudinary
+- bcryptjs + jose
+- Tailwind CSS 4
+
+## Environment variables
+
+Copy `.env.example` and configure:
+
+```env
+MONGODB_URI=
+MONGODB_DB=megham
+JWT_SECRET=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+```
+
+Use a long, random `JWT_SECRET` in production. Production startup intentionally rejects a missing JWT secret.
 
 ## Run locally
 
@@ -21,12 +48,27 @@ npm install
 npm run dev
 ```
 
-Open the local address printed by the development server.
+Open `http://localhost:3000`.
 
-## Production build
+## Production verification
 
 ```bash
 npm run build
+npm run lint
 ```
 
-The current file data is realistic demo state for the interface. Connect the existing UI actions to your Node/Express API, MongoDB metadata layer and Cloudinary upload endpoints when integrating the production backend.
+## Core API routes
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `GET /api/files`
+- `POST /api/cloudinary/sign`
+- `POST /api/files/complete`
+- `PATCH /api/files/:id` — star, share, rename, trash, restore
+- `DELETE /api/files/:id` — permanent deletion after trashing
+
+## Deployment
+
+The repository is connected to Vercel. Feature branches create preview deployments and `main` is the production branch.

@@ -575,6 +575,10 @@ function UploadModal({ close, complete, error }: {
   const [selected, setSelected] = useState<File | null>(null);
   const start = async () => {
     if (!selected) return;
+    if (selected.size > 25 * 1024 * 1024) {
+      error("Maximum upload size is 25 MB.");
+      return;
+    }
     setProgress(10);
     try {
       const signatureResponse = await fetch("/api/cloudinary/sign", {

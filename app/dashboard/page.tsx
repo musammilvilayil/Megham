@@ -18,10 +18,13 @@ type FileItem = {
   name: string;
   type: "folder" | "pdf" | "doc" | "image" | "zip";
   size: string;
+  bytes: number;
+  url: string;
   modified: string;
   owner: string;
   starred?: boolean;
   shared?: boolean;
+  deletedAt?: string | null;
 };
 
 type SessionUser = { _id?: string; id?: string; name: string; email: string };
@@ -80,16 +83,20 @@ export default function Home() {
     if (!response.ok) return;
     const data = await response.json();
     setFiles(data.files.map((item: {
-      _id: string; name: string; bytes: number; createdAt: string;
-      starred?: boolean;
+      _id: string; name: string; bytes: number; url: string; createdAt: string;
+      starred?: boolean; shared?: boolean; deletedAt?: string | null;
     }) => ({
       id: item._id,
       name: item.name,
       type: fileType(item.name),
       size: readableSize(item.bytes),
+      bytes: item.bytes,
+      url: item.url,
       modified: new Date(item.createdAt).toLocaleString(),
       owner: "You",
       starred: item.starred,
+      shared: item.shared,
+      deletedAt: item.deletedAt ?? null,
     })));
   };
 
@@ -138,13 +145,20 @@ export default function Home() {
   }, []);
 
   const visibleFiles = useMemo(() => {
-    let result = [...files];
+    let result = active === "Trash"
+      ? files.filter((item) => item.deletedAt)
+      : files.filter((item) => !item.deletedAt);
     if (active === "Shared") result = result.filter((item) => item.shared);
     if (active === "Starred") result = result.filter((item) => item.starred);
-    if (active === "Trash") result = [];
     if (query) result = result.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
     return result;
   }, [active, files, query]);
+
+  const activeFiles = useMemo(() => files.filter((item) => !item.deletedAt), [files]);
+  const usedBytes = useMemo(() => activeFiles.reduce((sum, item) => sum + item.bytes, 0), [activeFiles]);
+  const usedLabel = usedBytes < 1024 * 1024 * 1024
+    ? `${(usedBytes / 1024 / 1024).toFixed(1)} MB`
+    : `${(usedBytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 
   const selectView = (view: ViewName) => {
     setActive(view);
@@ -152,21 +166,79 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const toggleStar = (id: string) => {
-    setFiles((current) => current.map((item) => item.id === id ? { ...item, starred: !item.starred } : item));
-    setToast("Starred files updated");
+  const mutateFile = async (id: string, body: Record<string, unknown>) => {
+    const response = await fetch(`/api/files/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error ?? "Could not update file.");
+    setFiles((current) => current.map((item) => item.id === id ? {
+      ...item,
+      name: data.file.name,
+      starred: data.file.starred,
+      shared: data.file.shared,
+      deletedAt: data.file.deletedAt ?? null,
+    } : item));
+  };
+
+  const toggleStar = async (id: string) => {
+    const current = files.find((item) => item.id === id);
+    if (!current) return;
+    try {
+      await mutateFile(id, { action: "star", value: !current.starred });
+      setToast(current.starred ? "Removed from starred" : "Added to starred");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not update starred file.");
+    }
+  };
+
+  const moveToTrash = async (id: string) => {
+    try {
+      await mutateFile(id, { action: "trash" });
+      setToast("File moved to trash");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not move file to trash.");
+    }
+  };
+
+  const restoreFile = async (id: string) => {
+    try {
+      await mutateFile(id, { action: "restore" });
+      setToast("File restored");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not restore file.");
+    }
+  };
+
+  const deleteForever = async (id: string) => {
+    try {
+      const response = await fetch(`/api/files/${id}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not delete file.");
+      setFiles((current) => current.filter((item) => item.id !== id));
+      setToast("File permanently deleted");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not delete file.");
+    }
   };
 
   const completeUpload = (uploaded: {
-    _id: string; name: string; bytes: number;
+    _id: string; name: string; bytes: number; url: string;
   }) => {
     setFiles((current) => [{
       id: uploaded._id,
       name: uploaded.name,
       type: fileType(uploaded.name),
       size: readableSize(uploaded.bytes),
+      bytes: uploaded.bytes,
+      url: uploaded.url,
       modified: "Just now",
       owner: "You",
+      starred: false,
+      shared: false,
+      deletedAt: null,
     }, ...current]);
     setUploadOpen(false);
     setToast(`Upload complete — ${uploaded.name}`);
@@ -207,9 +279,9 @@ export default function Home() {
         </nav>
 
         <div className="storage-mini">
-          <div className="storage-mini-head"><span><HardDrive size={15} /> Storage</span><b>68%</b></div>
-          <div className="meter"><span /></div>
-          <p>102 GB of 150 GB used</p>
+          <div className="storage-mini-head"><span><HardDrive size={15} /> Storage</span><b>{activeFiles.length}</b></div>
+          <div className="meter"><span style={{ width: `${Math.min(100, Math.max(2, (usedBytes / (150 * 1024 ** 3)) * 100))}%` }} /></div>
+          <p>{usedLabel} uploaded</p>
           <button onClick={() => setToast("Upgrade plans will be available soon")}>Upgrade storage</button>
         </div>
         <div className="profile">
@@ -254,7 +326,7 @@ export default function Home() {
 
         <div className="content">
           {active === "Dashboard" ? (
-            <Dashboard files={files} onUpload={() => setUploadOpen(true)} onNavigate={selectView} onStar={toggleStar} />
+            <Dashboard files={activeFiles} onUpload={() => setUploadOpen(true)} onNavigate={selectView} onStar={toggleStar} />
           ) : active === "Activity" ? (
             <ActivityView />
           ) : active === "Admin" ? (
@@ -265,6 +337,7 @@ export default function Home() {
             <FilesView
               title={active} files={visibleFiles} query={query} grid={grid}
               setGrid={setGrid} onUpload={() => setUploadOpen(true)} onStar={toggleStar}
+              onTrash={moveToTrash} onRestore={restoreFile} onDelete={deleteForever}
             />
           )}
         </div>
@@ -279,6 +352,12 @@ export default function Home() {
 function Dashboard({ files, onUpload, onNavigate, onStar }: {
   files: FileItem[]; onUpload: () => void; onNavigate: (view: ViewName) => void; onStar: (id: string) => void;
 }) {
+  const usedBytes = files.reduce((sum, item) => sum + item.bytes, 0);
+  const usedLabel = usedBytes < 1024 * 1024 * 1024
+    ? `${(usedBytes / 1024 / 1024).toFixed(1)} MB`
+    : `${(usedBytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  const percent = Math.min(100, Math.round((usedBytes / (150 * 1024 ** 3)) * 100));
+
   return (
     <>
       <section className="page-heading dashboard-heading">
@@ -290,9 +369,9 @@ function Dashboard({ files, onUpload, onNavigate, onStar }: {
         <article className="panel storage-card">
           <div className="section-head"><div><p className="eyebrow">Storage overview</p><h2>Your cloud, at a glance</h2></div><button className="plain-button">Manage</button></div>
           <div className="storage-content">
-            <div className="storage-ring"><div><strong>68%</strong><span>used</span></div></div>
+            <div className="storage-ring"><div><strong>{percent}%</strong><span>used</span></div></div>
             <div className="storage-stats">
-              <strong>102.4 GB <span>of 150 GB</span></strong>
+              <strong>{usedLabel} <span>uploaded</span></strong>
               <div className="legend"><span><i className="dot blue" />Documents <b>38 GB</b></span><span><i className="dot sea" />Media <b>43 GB</b></span><span><i className="dot silver" />Other <b>21.4 GB</b></span></div>
             </div>
           </div>
@@ -321,8 +400,9 @@ function Dashboard({ files, onUpload, onNavigate, onStar }: {
   );
 }
 
-function FilesView({ title, files, query, grid, setGrid, onUpload, onStar }: {
+function FilesView({ title, files, query, grid, setGrid, onUpload, onStar, onTrash, onRestore, onDelete }: {
   title: ViewName; files: FileItem[]; query: string; grid: boolean; setGrid: (v: boolean) => void; onUpload: () => void; onStar: (id: string) => void;
+  onTrash: (id: string) => void; onRestore: (id: string) => void; onDelete: (id: string) => void;
 }) {
   const empty = title === "Trash" || files.length === 0;
   return (
@@ -347,7 +427,7 @@ function FilesView({ title, files, query, grid, setGrid, onUpload, onStar }: {
           </div>
         ) : grid ? (
           <div className="file-grid">{files.map((item) => <FileCard key={item.id} item={item} onStar={onStar} />)}</div>
-        ) : <FileTable files={files} onStar={onStar} />}
+        ) : <FileTable files={files} onStar={onStar} onTrash={onTrash} onRestore={onRestore} onDelete={onDelete} />}
       </section>
     </>
   );
@@ -364,16 +444,29 @@ function FileCard({ item, onStar }: { item: FileItem; onStar: (id: string) => vo
   );
 }
 
-function FileTable({ files, onStar }: { files: FileItem[]; onStar: (id: string) => void }) {
+function FileTable({ files, onStar, onTrash, onRestore, onDelete }: {
+  files: FileItem[]; onStar: (id: string) => void;
+  onTrash?: (id: string) => void; onRestore?: (id: string) => void; onDelete?: (id: string) => void;
+}) {
   return (
     <div className="table-wrap">
       <table>
         <thead><tr><th>Name</th><th>Owner</th><th>Modified</th><th>Size</th><th><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{files.map((item) => (
           <tr key={item.id}>
-            <td><div className={`table-icon ${item.type}`}>{fileIcon(item.type)}</div><div><strong>{item.name}</strong><span>{item.shared ? "Shared workspace" : "Private"}</span></div></td>
+            <td><div className={`table-icon ${item.type}`}>{fileIcon(item.type)}</div><div><a href={item.url} target="_blank" rel="noreferrer"><strong>{item.name}</strong></a><span>{item.shared ? "Shared workspace" : "Private"}</span></div></td>
             <td>{item.owner}</td><td>{item.modified}</td><td>{item.size}</td>
-            <td className="row-actions"><button onClick={() => onStar(item.id)} className={item.starred ? "starred" : ""}><Star size={16} fill={item.starred ? "currentColor" : "none"} /></button><button><MoreHorizontal size={18} /></button></td>
+            <td className="row-actions">
+              <button onClick={() => onStar(item.id)} className={item.starred ? "starred" : ""} aria-label="Toggle starred"><Star size={16} fill={item.starred ? "currentColor" : "none"} /></button>
+              {item.deletedAt ? (
+                <>
+                  <button onClick={() => onRestore?.(item.id)} aria-label="Restore file"><ArchiveRestore size={17} /></button>
+                  <button onClick={() => onDelete?.(item.id)} aria-label="Delete permanently"><Trash2 size={17} /></button>
+                </>
+              ) : (
+                <button onClick={() => onTrash?.(item.id)} aria-label="Move to trash"><Trash2 size={17} /></button>
+              )}
+            </td>
           </tr>
         ))}</tbody>
       </table>
@@ -445,7 +538,7 @@ function Toggle({ label, value, setValue }: { label: string; value: boolean; set
 
 function UploadModal({ close, complete, error }: {
   close: () => void;
-  complete: (file: { _id: string; name: string; bytes: number }) => void;
+  complete: (file: { _id: string; name: string; bytes: number; url: string }) => void;
   error: (message: string) => void;
 }) {
   const [progress, setProgress] = useState(0);

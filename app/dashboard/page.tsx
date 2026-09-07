@@ -11,17 +11,20 @@ import {
 
 type ViewName =
   | "Dashboard" | "My files" | "Shared" | "Recent" | "Starred" | "Trash"
-  | "Activity" | "Admin" | "Settings";
+  | "Activity" | "Settings";
 
 type FileItem = {
   id: string;
   name: string;
   type: "folder" | "pdf" | "doc" | "image" | "zip";
   size: string;
+  bytes: number;
+  url: string;
   modified: string;
   owner: string;
   starred?: boolean;
   shared?: boolean;
+  deletedAt?: string | null;
 };
 
 type SessionUser = { _id?: string; id?: string; name: string; email: string };
@@ -50,7 +53,6 @@ const navPrimary: { label: ViewName; icon: typeof Cloud }[] = [
 
 const navManage: { label: ViewName; icon: typeof Cloud }[] = [
   { label: "Activity", icon: Activity },
-  { label: "Admin", icon: ShieldCheck },
   { label: "Settings", icon: Settings },
 ];
 
@@ -80,16 +82,20 @@ export default function Home() {
     if (!response.ok) return;
     const data = await response.json();
     setFiles(data.files.map((item: {
-      _id: string; name: string; bytes: number; createdAt: string;
-      starred?: boolean;
+      _id: string; name: string; bytes: number; url: string; createdAt: string;
+      starred?: boolean; shared?: boolean; deletedAt?: string | null;
     }) => ({
       id: item._id,
       name: item.name,
       type: fileType(item.name),
       size: readableSize(item.bytes),
+      bytes: item.bytes,
+      url: item.url,
       modified: new Date(item.createdAt).toLocaleString(),
       owner: "You",
       starred: item.starred,
+      shared: item.shared,
+      deletedAt: item.deletedAt ?? null,
     })));
   };
 
@@ -138,13 +144,20 @@ export default function Home() {
   }, []);
 
   const visibleFiles = useMemo(() => {
-    let result = [...files];
+    let result = active === "Trash"
+      ? files.filter((item) => item.deletedAt)
+      : files.filter((item) => !item.deletedAt);
     if (active === "Shared") result = result.filter((item) => item.shared);
     if (active === "Starred") result = result.filter((item) => item.starred);
-    if (active === "Trash") result = [];
     if (query) result = result.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
     return result;
   }, [active, files, query]);
+
+  const activeFiles = useMemo(() => files.filter((item) => !item.deletedAt), [files]);
+  const usedBytes = useMemo(() => activeFiles.reduce((sum, item) => sum + item.bytes, 0), [activeFiles]);
+  const usedLabel = usedBytes < 1024 * 1024 * 1024
+    ? `${(usedBytes / 1024 / 1024).toFixed(1)} MB`
+    : `${(usedBytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 
   const selectView = (view: ViewName) => {
     setActive(view);
@@ -152,21 +165,101 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const toggleStar = (id: string) => {
-    setFiles((current) => current.map((item) => item.id === id ? { ...item, starred: !item.starred } : item));
-    setToast("Starred files updated");
+  const mutateFile = async (id: string, body: Record<string, unknown>) => {
+    const response = await fetch(`/api/files/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error ?? "Could not update file.");
+    setFiles((current) => current.map((item) => item.id === id ? {
+      ...item,
+      name: data.file.name,
+      starred: data.file.starred,
+      shared: data.file.shared,
+      deletedAt: data.file.deletedAt ?? null,
+    } : item));
+  };
+
+  const toggleStar = async (id: string) => {
+    const current = files.find((item) => item.id === id);
+    if (!current) return;
+    try {
+      await mutateFile(id, { action: "star", value: !current.starred });
+      setToast(current.starred ? "Removed from starred" : "Added to starred");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not update starred file.");
+    }
+  };
+
+  const moveToTrash = async (id: string) => {
+    try {
+      await mutateFile(id, { action: "trash" });
+      setToast("File moved to trash");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not move file to trash.");
+    }
+  };
+
+  const restoreFile = async (id: string) => {
+    try {
+      await mutateFile(id, { action: "restore" });
+      setToast("File restored");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not restore file.");
+    }
+  };
+
+  const toggleShare = async (id: string) => {
+    const current = files.find((item) => item.id === id);
+    if (!current) return;
+    try {
+      await mutateFile(id, { action: "share", value: !current.shared });
+      setToast(current.shared ? "Sharing disabled" : "File marked as shared");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not update sharing.");
+    }
+  };
+
+  const renameFile = async (id: string, currentName: string) => {
+    const nextName = window.prompt("Rename file", currentName)?.trim();
+    if (!nextName || nextName === currentName) return;
+    try {
+      await mutateFile(id, { action: "rename", name: nextName });
+      setToast("File renamed");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not rename file.");
+    }
+  };
+
+  const deleteForever = async (id: string) => {
+    try {
+      const response = await fetch(`/api/files/${id}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not delete file.");
+      setFiles((current) => current.filter((item) => item.id !== id));
+      setToast("File permanently deleted");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not delete file.");
+    }
   };
 
   const completeUpload = (uploaded: {
-    _id: string; name: string; bytes: number;
+    _id: string; name: string; bytes: number; url: string;
   }) => {
     setFiles((current) => [{
       id: uploaded._id,
       name: uploaded.name,
       type: fileType(uploaded.name),
       size: readableSize(uploaded.bytes),
+      bytes: uploaded.bytes,
+      url: uploaded.url,
       modified: "Just now",
       owner: "You",
+      starred: false,
+      shared: false,
+      deletedAt: null,
     }, ...current]);
     setUploadOpen(false);
     setToast(`Upload complete — ${uploaded.name}`);
@@ -207,9 +300,9 @@ export default function Home() {
         </nav>
 
         <div className="storage-mini">
-          <div className="storage-mini-head"><span><HardDrive size={15} /> Storage</span><b>68%</b></div>
-          <div className="meter"><span /></div>
-          <p>102 GB of 150 GB used</p>
+          <div className="storage-mini-head"><span><HardDrive size={15} /> Storage</span><b>{activeFiles.length}</b></div>
+          <div className="meter"><span style={{ width: `${Math.min(100, Math.max(2, (usedBytes / (150 * 1024 ** 3)) * 100))}%` }} /></div>
+          <p>{usedLabel} uploaded</p>
           <button onClick={() => setToast("Upgrade plans will be available soon")}>Upgrade storage</button>
         </div>
         <div className="profile">
@@ -245,26 +338,29 @@ export default function Home() {
           {notifications && (
             <div className="notification-panel">
               <div className="panel-title"><strong>Notifications</strong><button onClick={() => setNotifications(false)}><X size={17} /></button></div>
-              <div className="notice unread"><div className="notice-icon sea"><Share2 size={16} /></div><p><b>Aishwarya</b> shared “Research notes” with you.<span>12 minutes ago</span></p></div>
-              <div className="notice"><div className="notice-icon blue"><CloudUpload size={16} /></div><p>Your weekly backup is complete.<span>Yesterday</span></p></div>
-              <button className="view-all">View all activity</button>
+              {activeFiles[0] ? (
+                <div className="notice unread"><div className="notice-icon blue"><CloudUpload size={16} /></div><p><b>Latest upload</b> — {activeFiles[0].name}<span>{activeFiles[0].modified}</span></p></div>
+              ) : (
+                <div className="notice"><div className="notice-icon sea"><ShieldCheck size={16} /></div><p>Your workspace is ready.<span>Upload a file to get started.</span></p></div>
+              )}
+              <button className="view-all" onClick={() => { setNotifications(false); selectView("Activity"); }}>View activity</button>
             </div>
           )}
         </header>
 
         <div className="content">
           {active === "Dashboard" ? (
-            <Dashboard files={files} onUpload={() => setUploadOpen(true)} onNavigate={selectView} onStar={toggleStar} />
+            <Dashboard files={activeFiles} onUpload={() => setUploadOpen(true)} onNavigate={selectView} onStar={toggleStar} />
           ) : active === "Activity" ? (
-            <ActivityView />
-          ) : active === "Admin" ? (
-            <AdminView />
+            <ActivityView files={activeFiles} />
           ) : active === "Settings" ? (
-            <SettingsView dark={dark} setDark={setDark} toast={setToast} />
+            <SettingsView user={user} dark={dark} setDark={setDark} toast={setToast} />
           ) : (
             <FilesView
               title={active} files={visibleFiles} query={query} grid={grid}
               setGrid={setGrid} onUpload={() => setUploadOpen(true)} onStar={toggleStar}
+              onTrash={moveToTrash} onRestore={restoreFile} onDelete={deleteForever}
+              onShare={toggleShare} onRename={renameFile}
             />
           )}
         </div>
@@ -279,10 +375,19 @@ export default function Home() {
 function Dashboard({ files, onUpload, onNavigate, onStar }: {
   files: FileItem[]; onUpload: () => void; onNavigate: (view: ViewName) => void; onStar: (id: string) => void;
 }) {
+  const usedBytes = files.reduce((sum, item) => sum + item.bytes, 0);
+  const now = new Date();
+  const todayLabel = new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "long" }).format(now);
+  const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening";
+  const usedLabel = usedBytes < 1024 * 1024 * 1024
+    ? `${(usedBytes / 1024 / 1024).toFixed(1)} MB`
+    : `${(usedBytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  const percent = Math.min(100, Math.round((usedBytes / (150 * 1024 ** 3)) * 100));
+
   return (
     <>
       <section className="page-heading dashboard-heading">
-        <div><p className="eyebrow">Thursday, 23 July</p><h1>Good evening, Musammil.</h1><span>Everything important is right where you left it.</span></div>
+        <div><p className="eyebrow">{todayLabel}</p><h1>{greeting}.</h1><span>Everything important is right where you left it.</span></div>
         <button className="primary-button" onClick={onUpload}><Upload size={18} /> Upload files</button>
       </section>
 
@@ -290,10 +395,10 @@ function Dashboard({ files, onUpload, onNavigate, onStar }: {
         <article className="panel storage-card">
           <div className="section-head"><div><p className="eyebrow">Storage overview</p><h2>Your cloud, at a glance</h2></div><button className="plain-button">Manage</button></div>
           <div className="storage-content">
-            <div className="storage-ring"><div><strong>68%</strong><span>used</span></div></div>
+            <div className="storage-ring" style={{ background: `conic-gradient(var(--sea) 0 ${percent}%, var(--surface-3) ${percent}% 100%)` }}><div><strong>{percent}%</strong><span>used</span></div></div>
             <div className="storage-stats">
-              <strong>102.4 GB <span>of 150 GB</span></strong>
-              <div className="legend"><span><i className="dot blue" />Documents <b>38 GB</b></span><span><i className="dot sea" />Media <b>43 GB</b></span><span><i className="dot silver" />Other <b>21.4 GB</b></span></div>
+              <strong>{usedLabel} <span>uploaded</span></strong>
+              <div className="legend"><span><i className="dot blue" />Documents <b>{files.filter((item) => ["pdf", "doc"].includes(item.type)).length}</b></span><span><i className="dot sea" />Media <b>{files.filter((item) => item.type === "image").length}</b></span><span><i className="dot silver" />Other <b>{files.filter((item) => !["pdf", "doc", "image"].includes(item.type)).length}</b></span></div>
             </div>
           </div>
         </article>
@@ -321,8 +426,10 @@ function Dashboard({ files, onUpload, onNavigate, onStar }: {
   );
 }
 
-function FilesView({ title, files, query, grid, setGrid, onUpload, onStar }: {
+function FilesView({ title, files, query, grid, setGrid, onUpload, onStar, onTrash, onRestore, onDelete, onShare, onRename }: {
   title: ViewName; files: FileItem[]; query: string; grid: boolean; setGrid: (v: boolean) => void; onUpload: () => void; onStar: (id: string) => void;
+  onTrash: (id: string) => void; onRestore: (id: string) => void; onDelete: (id: string) => void;
+  onShare: (id: string) => void; onRename: (id: string, currentName: string) => void;
 }) {
   const empty = title === "Trash" || files.length === 0;
   return (
@@ -347,7 +454,7 @@ function FilesView({ title, files, query, grid, setGrid, onUpload, onStar }: {
           </div>
         ) : grid ? (
           <div className="file-grid">{files.map((item) => <FileCard key={item.id} item={item} onStar={onStar} />)}</div>
-        ) : <FileTable files={files} onStar={onStar} />}
+        ) : <FileTable files={files} onStar={onStar} onTrash={onTrash} onRestore={onRestore} onDelete={onDelete} onShare={onShare} onRename={onRename} />}
       </section>
     </>
   );
@@ -364,16 +471,34 @@ function FileCard({ item, onStar }: { item: FileItem; onStar: (id: string) => vo
   );
 }
 
-function FileTable({ files, onStar }: { files: FileItem[]; onStar: (id: string) => void }) {
+function FileTable({ files, onStar, onTrash, onRestore, onDelete, onShare, onRename }: {
+  files: FileItem[]; onStar: (id: string) => void;
+  onTrash?: (id: string) => void; onRestore?: (id: string) => void; onDelete?: (id: string) => void;
+  onShare?: (id: string) => void; onRename?: (id: string, currentName: string) => void;
+}) {
   return (
     <div className="table-wrap">
       <table>
         <thead><tr><th>Name</th><th>Owner</th><th>Modified</th><th>Size</th><th><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{files.map((item) => (
           <tr key={item.id}>
-            <td><div className={`table-icon ${item.type}`}>{fileIcon(item.type)}</div><div><strong>{item.name}</strong><span>{item.shared ? "Shared workspace" : "Private"}</span></div></td>
+            <td><div className={`table-icon ${item.type}`}>{fileIcon(item.type)}</div><div><a href={item.url} target="_blank" rel="noreferrer"><strong>{item.name}</strong></a><span>{item.shared ? "Shared workspace" : "Private"}</span></div></td>
             <td>{item.owner}</td><td>{item.modified}</td><td>{item.size}</td>
-            <td className="row-actions"><button onClick={() => onStar(item.id)} className={item.starred ? "starred" : ""}><Star size={16} fill={item.starred ? "currentColor" : "none"} /></button><button><MoreHorizontal size={18} /></button></td>
+            <td className="row-actions">
+              <button onClick={() => onStar(item.id)} className={item.starred ? "starred" : ""} aria-label="Toggle starred"><Star size={16} fill={item.starred ? "currentColor" : "none"} /></button>
+              {item.deletedAt ? (
+                <>
+                  <button onClick={() => onRestore?.(item.id)} aria-label="Restore file"><ArchiveRestore size={17} /></button>
+                  <button onClick={() => onDelete?.(item.id)} aria-label="Delete permanently"><Trash2 size={17} /></button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => onShare?.(item.id)} aria-label="Toggle sharing"><Share2 size={17} /></button>
+                  <button onClick={() => onRename?.(item.id, item.name)} aria-label="Rename file"><MoreHorizontal size={18} /></button>
+                  <button onClick={() => onTrash?.(item.id)} aria-label="Move to trash"><Trash2 size={17} /></button>
+                </>
+              )}
+            </td>
           </tr>
         ))}</tbody>
       </table>
@@ -381,21 +506,19 @@ function FileTable({ files, onStar }: { files: FileItem[]; onStar: (id: string) 
   );
 }
 
-function ActivityView() {
-  const events = [
-    { icon: Upload, color: "sea", title: "You uploaded Portfolio case study.pdf", detail: "My files / Portfolio", time: "12 minutes ago" },
-    { icon: Share2, color: "blue", title: "Aishwarya shared Research notes.docx", detail: "Can edit · 3 collaborators", time: "1 hour ago" },
-    { icon: Star, color: "amber", title: "You starred MEGHAM Product", detail: "Quick access updated", time: "Yesterday" },
-    { icon: Trash2, color: "red", title: "You moved old-assets.zip to trash", detail: "Permanently deletes in 29 days", time: "Jul 21, 2026" },
-  ];
+function ActivityView({ files }: { files: FileItem[] }) {
   return (
     <>
-      <section className="page-heading"><div><p className="eyebrow">Audit trail</p><h1>Activity</h1><span>A clear record of changes across your workspace.</span></div><button className="secondary-button"><FileText size={17} /> Export log</button></section>
+      <section className="page-heading"><div><p className="eyebrow">Workspace history</p><h1>Activity</h1><span>Your latest stored files and their current state.</span></div></section>
       <section className="panel activity-card">
-        <div className="section-head"><div><p className="eyebrow">This week</p><h2>Workspace events</h2></div><button className="plain-button">Filter <ChevronDown size={15} /></button></div>
-        <div className="timeline">{events.map(({ icon: Icon, color, title, detail, time }) => (
-          <div className="timeline-row" key={title}><div className={`timeline-icon ${color}`}><Icon size={17} /></div><div><strong>{title}</strong><p>{detail}</p></div><time>{time}</time></div>
-        ))}</div>
+        <div className="section-head"><div><p className="eyebrow">Latest</p><h2>Recent uploads</h2></div></div>
+        {files.length ? (
+          <div className="timeline">{files.slice(0, 20).map((item) => (
+            <div className="timeline-row" key={item.id}><div className="timeline-icon sea"><Upload size={17} /></div><div><strong>{item.name}</strong><p>{item.shared ? "Shared · " : "Private · "}{item.size}</p></div><time>{item.modified}</time></div>
+          ))}</div>
+        ) : (
+          <div className="empty-state"><div><CloudUpload size={30} /></div><h2>No activity yet</h2><p>Upload your first file and it will appear here.</p></div>
+        )}
       </section>
     </>
   );
@@ -421,7 +544,7 @@ function AdminView() {
   );
 }
 
-function SettingsView({ dark, setDark, toast }: { dark: boolean; setDark: (v: boolean) => void; toast: (v: string) => void }) {
+function SettingsView({ user, dark, setDark, toast }: { user: SessionUser; dark: boolean; setDark: (v: boolean) => void; toast: (v: string) => void }) {
   const [emailUpdates, setEmailUpdates] = useState(true);
   const [security, setSecurity] = useState(true);
   return (
@@ -430,7 +553,7 @@ function SettingsView({ dark, setDark, toast }: { dark: boolean; setDark: (v: bo
       <section className="settings-layout">
         <div className="settings-nav panel"><button className="selected">General</button><button>Security</button><button>Notifications</button><button>Sharing</button><button>Billing</button></div>
         <div className="panel settings-panel">
-          <div className="settings-group"><h2>Profile</h2><p>Information visible to people you collaborate with.</p><div className="profile-edit"><div className="avatar big">MM</div><div><strong>Muhammad Musammil A</strong><span>musammilvilayil@icloud.com</span></div><button className="secondary-button">Change photo</button></div></div>
+          <div className="settings-group"><h2>Profile</h2><p>Your account information.</p><div className="profile-edit"><div className="avatar big">{user.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</div><div><strong>{user.name}</strong><span>{user.email}</span></div></div></div>
           <div className="settings-group"><h2>Appearance</h2><p>Choose how MEGHAM looks on this device.</p><div className="theme-options"><button className={!dark ? "selected" : ""} onClick={() => setDark(false)}><Sun /><span><b>Light</b><small>Bright spatial workspace</small></span></button><button className={dark ? "selected" : ""} onClick={() => setDark(true)}><Moon /><span><b>Dark</b><small>Easy on the eyes</small></span></button></div></div>
           <div className="settings-group"><h2>Notifications</h2><Toggle label="Product and storage updates" value={emailUpdates} setValue={setEmailUpdates} /><Toggle label="Security alerts" value={security} setValue={setSecurity} /></div>
         </div>
@@ -445,7 +568,7 @@ function Toggle({ label, value, setValue }: { label: string; value: boolean; set
 
 function UploadModal({ close, complete, error }: {
   close: () => void;
-  complete: (file: { _id: string; name: string; bytes: number }) => void;
+  complete: (file: { _id: string; name: string; bytes: number; url: string }) => void;
   error: (message: string) => void;
 }) {
   const [progress, setProgress] = useState(0);

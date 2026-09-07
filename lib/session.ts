@@ -2,10 +2,13 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
 export const SESSION_COOKIE = "megham_session";
-const secret = () =>
-  new TextEncoder().encode(
-    process.env.JWT_SECRET ?? "development-only-change-this-secret",
-  );
+const secret = () => {
+  const value = process.env.JWT_SECRET;
+  if (!value && process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET is required in production.");
+  }
+  return new TextEncoder().encode(value ?? "development-only-change-this-secret");
+};
 
 export async function createSession(userId: string) {
   const token = await new SignJWT({ userId })

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import cloudinary from "@/lib/cloudinary";
+import { isObjectId, serializeFile } from "@/lib/files";
 import { connectMongo } from "@/lib/mongodb";
+import { purgeFile } from "@/lib/purge";
 import { getSessionUserId } from "@/lib/session";
 import { CloudFile } from "@/models/CloudFile";
+import { Folder } from "@/models/Folder";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -12,6 +14,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   try {
     const { id } = await context.params;
+    if (!isObjectId(id)) return NextResponse.json({ error: "File not found." }, { status: 404 });
     const body = await request.json();
     await connectMongo();
 
@@ -36,15 +39,22 @@ export async function PATCH(request: Request, context: RouteContext) {
         file.name = name;
         break;
       }
-      case "share":
-        file.shared = typeof body.value === "boolean" ? body.value : !file.shared;
+      case "move": {
+        if (body.folder === null || body.folder === "root") {
+          file.folder = null;
+        } else if (isObjectId(body.folder) && (await Folder.exists({ _id: body.folder, owner: userId }))) {
+          file.folder = body.folder;
+        } else {
+          return NextResponse.json({ error: "Folder not found." }, { status: 404 });
+        }
         break;
+      }
       default:
         return NextResponse.json({ error: "Unsupported action." }, { status: 400 });
     }
 
     await file.save();
-    return NextResponse.json({ file });
+    return NextResponse.json({ file: serializeFile(file.toObject(), userId) });
   } catch {
     return NextResponse.json({ error: "Could not update file." }, { status: 500 });
   }
@@ -56,6 +66,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
   try {
     const { id } = await context.params;
+    if (!isObjectId(id)) return NextResponse.json({ error: "File not found." }, { status: 404 });
     await connectMongo();
     const file = await CloudFile.findOne({ _id: id, owner: userId });
     if (!file) return NextResponse.json({ error: "File not found." }, { status: 404 });
@@ -65,15 +76,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
         { status: 409 },
       );
     }
-
-    const resourceType = ["image", "video", "raw"].includes(file.resourceType)
-      ? file.resourceType
-      : "image";
-    await cloudinary.uploader.destroy(file.publicId, {
-      resource_type: resourceType as "image" | "video" | "raw",
-      invalidate: true,
-    });
-    await file.deleteOne();
+    await purgeFile(file);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Could not permanently delete file." }, { status: 500 });

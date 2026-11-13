@@ -7,7 +7,7 @@ export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await connectMongo();
-  const user = await User.findById(userId).select("name email").lean();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json({ user });
+  const doc = await User.findById(userId).select("name email").lean<{ _id: unknown; name: string; email: string }>();
+  if (!doc) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return NextResponse.json({ user: { id: String(doc._id), name: doc.name, email: doc.email } });
 }

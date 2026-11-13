@@ -11,6 +11,10 @@ const userSchema = new Schema(
       trim: true,
     },
     passwordHash: { type: String, required: true, select: false },
+    // Bumped to revoke every signed session cookie for this user.
+    sessionVersion: { type: Number, default: 0 },
+    resetTokenHash: { type: String, select: false },
+    resetExpires: { type: Date, select: false },
   },
   { timestamps: true },
 );

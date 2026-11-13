@@ -273,7 +273,7 @@ export default function Workspace() {
           <button className="icon-btn" onClick={() => setDark(!dark)} aria-label="Toggle theme">{dark ? <Sun size={19} /> : <Moon size={19} />}</button>
         </header>
 
-        <main className="content">
+        <main className="content" key={`${view}:${folderId ?? ""}`}>
           {view === "overview" && (
             <Overview user={user} stats={stats} recent={recent} onUpload={() => fileInput.current?.click()} onNewFolder={() => { go("files"); setDialog({ type: "newFolder" }); }}
               onNavigate={go} onOpen={(f) => (canPreview(f.name) ? setDialog({ type: "preview", index: -1 - recent.findIndex((r) => r.id === f.id) }) : download(f))} />
@@ -281,7 +281,7 @@ export default function Workspace() {
           {view === "settings" && <SettingsView user={user} dark={dark} setDark={setDark} stats={stats} notify={notify} onSignedOut={() => { setUser(null); setView("overview"); }} />}
           {listView && (
             <>
-              <header className="page-head">
+              <header className="page-head view-enter">
                 <div>
                   <p className="eyebrow">{search ? "Search results" : "Workspace"}</p>
                   <h1>{search ? <>Results for “{search}”</> : title}</h1>

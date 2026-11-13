@@ -1,5 +1,6 @@
 "use client";
 
+import { CountUp } from "./countup";
 import { ArrowUpRight, CloudUpload, FolderPlus, HardDrive, Share2, Star, Trash2 } from "lucide-react";
 import { formatBytes, kindOf, timeAgo } from "./format";
 import { FileGlyph } from "./glyph";
@@ -17,7 +18,7 @@ export function Overview({ user, stats, recent, onUpload, onNewFolder, onNavigat
   const total = stats?.kinds.reduce((s, k) => s + k.bytes, 0) || 1;
 
   return (
-    <div className="overview">
+    <div className="overview view-enter">
       <header className="hero-head">
         <div><p className="eyebrow">{new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date())}</p>
           <h1>{greeting}, {user.name.split(" ")[0]}</h1></div>
@@ -36,9 +37,9 @@ export function Overview({ user, stats, recent, onUpload, onNewFolder, onNavigat
           <ul className="legend">{stats?.kinds.map((k) => <li key={k.type}><i className={`k-${k.type}`} />{KIND_LABEL[k.type] ?? k.type}<b>{formatBytes(k.bytes)}</b></li>)}</ul>
         </section>
 
-        <button className="tile" onClick={() => onNavigate("starred")}><Star size={20} /><strong>{stats?.counts.starred ?? 0}</strong><span>Starred</span></button>
-        <button className="tile" onClick={() => onNavigate("shared")}><Share2 size={20} /><strong>{(stats?.counts.shared ?? 0)}</strong><span>Shared by you</span></button>
-        <button className="tile" onClick={() => onNavigate("trash")}><Trash2 size={20} /><strong>{stats?.counts.trashed ?? 0}</strong><span>In trash</span></button>
+        <button className="tile" style={{ "--i": 1 } as React.CSSProperties} onClick={() => onNavigate("starred")}><Star size={20} /><strong><CountUp value={stats?.counts.starred ?? 0} /></strong><span>Starred</span></button>
+        <button className="tile" style={{ "--i": 2 } as React.CSSProperties} onClick={() => onNavigate("shared")}><Share2 size={20} /><strong><CountUp value={stats?.counts.shared ?? 0} /></strong><span>Shared by you</span></button>
+        <button className="tile" style={{ "--i": 3 } as React.CSSProperties} onClick={() => onNavigate("trash")}><Trash2 size={20} /><strong><CountUp value={stats?.counts.trashed ?? 0} /></strong><span>In trash</span></button>
       </div>
 
       <section className="panel">
@@ -47,8 +48,8 @@ export function Overview({ user, stats, recent, onUpload, onNewFolder, onNavigat
           <div className="empty compact"><h2>Your workspace is ready</h2><p>Upload your first file — drag it anywhere onto this page.</p><button className="btn primary" onClick={onUpload}><CloudUpload size={16} />Upload files</button></div>
         ) : (
           <ul className="recent-list">
-            {recent.map((f) => (
-              <li key={f.id}><button onClick={() => onOpen(f)}>
+            {recent.map((f, i) => (
+              <li key={f.id} style={{ "--i": i + 3 } as React.CSSProperties}><button onClick={() => onOpen(f)}>
                 <FileGlyph name={f.name} size={18} box /><span className="name-text"><strong>{f.name}</strong><small>{kindOf(f.name).toUpperCase()} · {formatBytes(f.bytes)}</small></span>
                 <time>{timeAgo(f.createdAt)}</time></button></li>
             ))}

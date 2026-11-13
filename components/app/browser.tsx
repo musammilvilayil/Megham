@@ -113,8 +113,8 @@ export function FolderTiles({ folders, onOpen, onRename, onDelete, onDropIds }: 
   if (!folders.length) return null;
   return (
     <div className="folder-row">
-      {folders.map((f) => (
-        <div key={f.id} className="folder-tile" tabIndex={0} {...dropProps((ids) => onDropIds(ids, f.id))}
+      {folders.map((f, i) => (
+        <div key={f.id} style={{ "--i": i } as React.CSSProperties} className="folder-tile" tabIndex={0} {...dropProps((ids) => onDropIds(ids, f.id))}
           onClick={() => onOpen(f.id)} onKeyDown={(e) => e.key === "Enter" && onOpen(f.id)}>
           <Folder size={20} /><span>{f.name}</span>
           <Menu label={`Folder actions for ${f.name}`} items={[
@@ -138,8 +138,8 @@ export function FileList({ files, view, selected, setSelected, actions, grid }: 
   if (grid) {
     return (
       <div className="grid-files">
-        {files.map((f) => (
-          <article key={f.id} className={`card-file ${selected.has(f.id) ? "selected" : ""}`} draggable={f.mine && !trashed} onDragStart={(e) => dragStart(e, f, selected)} onClick={() => open(f)}>
+        {files.map((f, i) => (
+          <article key={f.id} style={{ "--i": Math.min(i, 14) } as React.CSSProperties} className={`card-file ${selected.has(f.id) ? "selected" : ""}`} draggable={f.mine && !trashed} onDragStart={(e) => dragStart(e, f, selected)} onClick={() => open(f)}>
             <button className="check" aria-label={`Select ${f.name}`} aria-pressed={selected.has(f.id)} onClick={(e) => { e.stopPropagation(); toggle(f.id); }}>{selected.has(f.id) && <Check size={14} />}</button>
             <div className="thumb">
               {kindOf(f.name) === "image" && f.resourceType === "image" && !trashed
@@ -163,8 +163,8 @@ export function FileList({ files, view, selected, setSelected, actions, grid }: 
         <button className="check" aria-label="Select all" aria-pressed={allSelected} onClick={() => setSelected(allSelected ? new Set() : new Set(files.map((f) => f.id)))}>{allSelected && <Check size={14} />}</button>
         <span>Name</span><span className="hide-sm">{trashed ? "Deleted" : "Added"}</span><span className="hide-sm right">Size</span><span />
       </div>
-      {files.map((f) => (
-        <div key={f.id} role="row" className={`trow ${selected.has(f.id) ? "selected" : ""}`} draggable={f.mine && !trashed} onDragStart={(e) => dragStart(e, f, selected)} onDoubleClick={() => open(f)}>
+      {files.map((f, i) => (
+        <div key={f.id} role="row" style={{ "--i": Math.min(i, 14) } as React.CSSProperties} className={`trow ${selected.has(f.id) ? "selected" : ""}`} draggable={f.mine && !trashed} onDragStart={(e) => dragStart(e, f, selected)} onDoubleClick={() => open(f)}>
           <button className="check" aria-label={`Select ${f.name}`} aria-pressed={selected.has(f.id)} onClick={() => toggle(f.id)}>{selected.has(f.id) && <Check size={14} />}</button>
           <button className="name-cell" onClick={() => open(f)} disabled={trashed}>
             <FileGlyph name={f.name} size={18} box />

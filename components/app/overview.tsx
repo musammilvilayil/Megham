@@ -20,7 +20,7 @@ export function Overview({ user, stats, recent, onUpload, onNewFolder, onNavigat
     <div className="overview">
       <header className="hero-head">
         <div><p className="eyebrow">{new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date())}</p>
-          <h1>{greeting}, <em>{user.name.split(" ")[0]}</em>.</h1></div>
+          <h1>{greeting}, {user.name.split(" ")[0]}</h1></div>
         <div className="row-btns">
           <button className="btn soft" onClick={onNewFolder}><FolderPlus size={16} />New folder</button>
           <button className="btn primary" onClick={onUpload}><CloudUpload size={16} />Upload</button>

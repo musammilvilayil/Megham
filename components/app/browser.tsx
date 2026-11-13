@@ -216,7 +216,6 @@ export function EmptyState({ view, query, onUpload, onNewFolder }: { view: ViewI
   const [title, text] = query ? [`No results for “${query}”`, "Try a different name."] : (copy[view] ?? copy.files);
   return (
     <div className="empty">
-      <div className="empty-art" aria-hidden><i /><i /><i /></div>
       <h2>{title}</h2><p>{text}</p>
       {!query && (view === "files" || view === "recent") && (
         <div className="row-btns"><button className="btn primary" onClick={onUpload}><Upload size={16} />Upload files</button>

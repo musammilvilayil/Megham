@@ -10,14 +10,13 @@ export default function ContactPage() {
       <PublicHeader />
       <main>
         <section className="inner-hero">
-          <p className="pill">Contact</p>
-          <h1>We’d love to <em>hear from you.</em></h1>
-          <p className="lede">Questions, feedback or upload trouble? Include the file type and approximate size when reporting an upload issue.</p>
+          <h1>Contact</h1>
+          <p className="lede">Questions or feedback? If an upload fails, include the file type and size.</p>
         </section>
         <section className="contact-layout">
           <div className="prose">
-            <h2>Let’s talk</h2>
-            <p>For support and general enquiries, email the MEGHAM team. We’ll get back to you as soon as we can.</p>
+            <h2>Email</h2>
+            <p>For support and general enquiries, write to the address below.</p>
             <a className="contact-line" href="mailto:musammilvilayil@gmail.com"><Mail size={18} />musammilvilayil@gmail.com</a>
             <span className="contact-line"><MapPin size={18} />Kerala, India</span>
           </div>

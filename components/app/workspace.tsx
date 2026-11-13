@@ -239,7 +239,7 @@ export default function Workspace() {
   return (
     <div className="app">
       <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
-        <div className="side-top"><Logo light /><button className="icon-btn light mobile-only" onClick={() => setMenuOpen(false)} aria-label="Close menu"><X size={20} /></button></div>
+        <div className="side-top"><Logo /><button className="icon-btn mobile-only" onClick={() => setMenuOpen(false)} aria-label="Close menu"><X size={20} /></button></div>
         <button className="new-btn" onClick={() => fileInput.current?.click()}><Plus size={18} />Upload</button>
         <nav aria-label="Primary">
           {NAV.map(({ id, label, icon: Icon, count }) => (
@@ -256,7 +256,7 @@ export default function Workspace() {
         <div className="side-user">
           <span className="avatar">{initials(user.name)}</span>
           <div><strong>{user.name}</strong><small>{user.email}</small></div>
-          <button className="icon-btn light" onClick={signOut} aria-label="Sign out" title="Sign out"><LogOut size={17} /></button>
+          <button className="icon-btn" onClick={signOut} aria-label="Sign out" title="Sign out"><LogOut size={17} /></button>
         </div>
       </aside>
       {menuOpen && <button className="scrim" aria-label="Close menu" onClick={() => setMenuOpen(false)} />}

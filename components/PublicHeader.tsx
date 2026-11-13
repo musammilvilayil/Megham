@@ -10,7 +10,7 @@ export default function PublicHeader() {
         <Link href="/about">About</Link>
         <Link href="/contact">Contact</Link>
       </nav>
-      <Link className="btn primary" href="/dashboard">Open workspace</Link>
+      <Link className="btn primary" href="/dashboard">Sign in</Link>
     </header>
   );
 }

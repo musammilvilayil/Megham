@@ -1,10 +1,8 @@
-export function Logo({ light = false }: { light?: boolean }) {
+export function Logo() {
   return (
-    <span className={`logo ${light ? "light" : ""}`}>
-      <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden>
-        <defs><linearGradient id={light ? "lg-l" : "lg-d"} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#7c6cff" /><stop offset="1" stopColor="#22d3ee" /></linearGradient></defs>
-        <path d="M9.5 24a6.5 6.5 0 0 1-.9-12.94A8 8 0 0 1 24 11.6 6.2 6.2 0 0 1 23 24H9.5Z" fill={`url(#${light ? "lg-l" : "lg-d"})`} />
-        <path d="M12 19.5c1.2-1.6 2.6-2.4 4-2.4s2.8.8 4 2.4" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" fill="none" opacity=".9" />
+    <span className="logo">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5 4.3 4.3 0 0 1 17.5 18H7Z" />
       </svg>
       <b>MEGHAM</b>
     </span>

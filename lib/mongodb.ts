@@ -17,7 +17,10 @@ const cache = globalWithMongoose.mongooseCache ?? {
 globalWithMongoose.mongooseCache = cache;
 
 export async function connectMongo() {
-  const uri = process.env.MONGODB_URI;
+  // Local development falls back to a MongoDB running on the default port.
+  const uri =
+    process.env.MONGODB_URI ??
+    (process.env.NODE_ENV === "production" ? undefined : "mongodb://127.0.0.1:27017");
   if (!uri) throw new Error("MONGODB_URI is not configured.");
   if (cache.connection) return cache.connection;
   cache.promise ??= mongoose.connect(uri, {

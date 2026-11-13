@@ -31,10 +31,14 @@ Copy `.env.example` and set:
 
 ## Develop
 
+Start MongoDB on the default local port (27017), then:
+
 ```bash
 npm install
 npm run dev
 ```
+
+Without `MONGODB_URI`, development connects to `mongodb://127.0.0.1:27017` (database `megham`). Production always requires `MONGODB_URI`.
 
 ## Verify
 

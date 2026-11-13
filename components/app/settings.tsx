@@ -39,7 +39,7 @@ export function SettingsView({ user, dark, setDark, stats, notify, onSignedOut }
 
       <section className="panel">
         <h2>Storage</h2>
-        <div className="meter big"><i style={{ width: `${Math.max(percent, stats?.usage.bytes ? 1.5 : 0)}%` }} /></div>
+        <div className="meter big" style={{ marginBottom: 12 }}><i style={{ width: `${Math.max(percent, stats?.usage.bytes ? 1.5 : 0)}%` }} /></div>
         <p className="muted">{stats ? `${formatBytes(stats.usage.bytes)} of ${formatBytes(stats.usage.quota)} used across ${stats.usage.count} file${stats.usage.count === 1 ? "" : "s"} (trash included).` : "Loading…"}</p>
       </section>
 

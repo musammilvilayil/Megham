@@ -33,8 +33,12 @@ export function Overview({ user, stats, recent, onUpload, onNewFolder, onNavigat
           <div className="panel-head"><span><HardDrive size={16} />Storage</span><button className="link-btn" onClick={() => onNavigate("settings")}>Manage <ArrowUpRight size={13} /></button></div>
           <div className="storage-figure"><strong>{stats ? formatBytes(stats.usage.bytes) : "—"}</strong><span>of {stats ? formatBytes(stats.usage.quota) : "—"}</span></div>
           <div className="meter big" role="progressbar" aria-valuenow={Math.round(percent)} aria-valuemin={0} aria-valuemax={100} aria-label="Storage used"><i style={{ width: `${Math.max(percent, stats?.usage.bytes ? 1.5 : 0)}%` }} /></div>
-          <div className="kind-bar">{stats?.kinds.map((k) => <i key={k.type} className={`k-${k.type}`} style={{ width: `${(k.bytes / total) * 100}%` }} title={`${KIND_LABEL[k.type] ?? k.type}: ${formatBytes(k.bytes)}`} />)}</div>
-          <ul className="legend">{stats?.kinds.map((k) => <li key={k.type}><i className={`k-${k.type}`} />{KIND_LABEL[k.type] ?? k.type}<b>{formatBytes(k.bytes)}</b></li>)}</ul>
+          {(stats?.kinds.length ?? 0) > 1 && (
+            <>
+              <div className="kind-bar">{stats?.kinds.map((k) => <i key={k.type} className={`k-${k.type}`} style={{ width: `${(k.bytes / total) * 100}%` }} title={`${KIND_LABEL[k.type] ?? k.type}: ${formatBytes(k.bytes)}`} />)}</div>
+              <ul className="legend">{stats?.kinds.map((k) => <li key={k.type}><i className={`k-${k.type}`} />{KIND_LABEL[k.type] ?? k.type}<b>{formatBytes(k.bytes)}</b></li>)}</ul>
+            </>
+          )}
         </section>
 
         <button className="tile" style={{ "--i": 1 } as React.CSSProperties} onClick={() => onNavigate("starred")}><Star size={20} /><strong><CountUp value={stats?.counts.starred ?? 0} /></strong><span>Starred</span></button>

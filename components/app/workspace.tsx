@@ -283,7 +283,7 @@ export default function Workspace() {
             <>
               <header className="page-head view-enter">
                 <div>
-                  <p className="eyebrow">{search ? "Search results" : "Workspace"}</p>
+                  {search && <p className="eyebrow">Search results</p>}
                   <h1>{search ? <>Results for “{search}”</> : title}</h1>
                 </div>
                 <div className="row-btns">
